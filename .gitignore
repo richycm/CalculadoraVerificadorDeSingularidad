@@ -1,3 +1,4 @@
+# Flutter / Dart
 .dart_tool/
 .packages
 build/
@@ -5,17 +6,43 @@ build/
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/
-*.iml
+.fvm/
+coverage/
 *.g.dart
+**/doc/api/
+
+# IDEs
+*.iml
+*.ipr
+*.iws
+.idea/
+.vscode/
+*.swp
+
+# Claude Code (configuración local)
+.claude/
 
 # Android
 **/android/**/gradle-wrapper.jar
 **/android/.gradle
+**/android/.kotlin
 **/android/captures/
 **/android/gradlew
 **/android/gradlew.bat
 **/android/local.properties
 **/android/**/GeneratedPluginRegistrant.java
+**/android/app/debug
+**/android/app/profile
+**/android/app/release
 key.properties
 *.jks
 *.keystore
+
+# Logs y temporales
+*.log
+*.tmp
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+desktop.ini
