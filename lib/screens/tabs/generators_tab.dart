@@ -192,22 +192,8 @@ class _GeneratorsTabState extends State<GeneratorsTab> {
   }
 }
 
-class PointOrder {
-  final ECPoint point;
-  final BigInt order;
-  final bool isGenerator;
-  PointOrder(this.point, this.order, this.isGenerator);
-}
-
 List<PointOrder> _computeOrders(Map<String, dynamic> data) {
-  EllipticCurve curve = data['curve'];
-  List<ECPoint> points = data['points'];
-  BigInt card = BigInt.from(points.length);
-  
-  List<PointOrder> result = [];
-  for (var pt in points) {
-    BigInt order = curve.findOrder(pt, card);
-    result.add(PointOrder(pt, order, order == card));
-  }
-  return result;
+  final EllipticCurve curve = data['curve'];
+  final List<ECPoint> points = data['points'];
+  return computePointOrders(curve, points);
 }

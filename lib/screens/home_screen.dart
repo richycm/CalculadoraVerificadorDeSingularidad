@@ -5,6 +5,7 @@ import 'tabs/general_tab.dart';
 import 'tabs/calculator_tab.dart';
 import 'tabs/tables_tab.dart';
 import 'tabs/generators_tab.dart';
+import 'export_screen.dart';
 import '../main.dart'; // for colors
 
 class HomeScreen extends StatefulWidget {
@@ -150,6 +151,26 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             ),
           ],
         ),
+        actions: [
+          IconButton(
+            tooltip: _curve == null
+                ? 'Calcula una curva para exportar'
+                : 'Exportar todos los datos a PDF',
+            icon: Icon(
+              Icons.picture_as_pdf_rounded,
+              color: _curve == null ? kTextFaint : kTextPrimary,
+            ),
+            onPressed: (_curve == null || _isLoading)
+                ? null
+                : () => showPdfExportDialog(
+                      context,
+                      curve: _curve!,
+                      points: _points,
+                      isSingular: _isSingular,
+                    ),
+          ),
+          const SizedBox(width: 4),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(48),
           child: Container(

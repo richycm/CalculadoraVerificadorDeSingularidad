@@ -1,51 +1,57 @@
-import 'dart:math';
-
-/// Algoritmo Extendido de Euclides para inverso modular
+/// Algoritmo Extendido de Euclides para inverso modular.
+/// Lanza excepción si gcd(a, m) != 1, es decir, si el inverso no existe.
 BigInt modInverse(BigInt a, BigInt m) {
-  BigInt m0 = m, t, q;
-  BigInt x0 = BigInt.zero, x1 = BigInt.one;
-
+  if (m <= BigInt.zero) throw Exception("El módulo debe ser positivo");
   if (m == BigInt.one) return BigInt.zero;
 
   a = a % m;
   if (a < BigInt.zero) a += m;
 
-  while (a > BigInt.one) {
-    if (m == BigInt.zero) throw Exception("No tiene inverso modular");
-    q = a ~/ m;
-    t = m;
-    m = a % m;
-    a = t;
-    t = x0;
-    x0 = x1 - q * x0;
-    x1 = t;
+  BigInt r0 = m, r1 = a;
+  BigInt s0 = BigInt.zero, s1 = BigInt.one;
+
+  while (r1 != BigInt.zero) {
+    final BigInt q = r0 ~/ r1;
+    final BigInt r = r0 - q * r1;
+    r0 = r1;
+    r1 = r;
+    final BigInt s = s0 - q * s1;
+    s0 = s1;
+    s1 = s;
   }
-  if (x1 < BigInt.zero) x1 += m0;
-  return x1;
+
+  if (r0 != BigInt.one) throw Exception("$a no tiene inverso modular mod $m");
+  return (s0 % m + m) % m;
 }
 
-/// Test de primalidad de Miller-Rabin
-bool isPrime(BigInt n, {int k = 5}) {
-  if (n <= BigInt.one) return false;
-  if (n == BigInt.two || n == BigInt.from(3)) return true;
-  if (n % BigInt.two == BigInt.zero) return false;
+/// Bases de Miller-Rabin que hacen el test determinista para n < 3.3·10^24.
+const List<int> _mrWitnesses = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37];
+
+/// Test de primalidad de Miller-Rabin con bases fijas (determinista en el
+/// rango que maneja la app, y sin resultados que varíen entre ejecuciones).
+bool isPrime(BigInt n) {
+  if (n < BigInt.two) return false;
+
+  for (final int w in _mrWitnesses) {
+    final BigInt bw = BigInt.from(w);
+    if (n == bw) return true;
+    if (n % bw == BigInt.zero) return false;
+  }
 
   BigInt d = n - BigInt.one;
   int s = 0;
-  while (d % BigInt.two == BigInt.zero) {
+  while (d.isEven) {
     d ~/= BigInt.two;
     s++;
   }
 
-  final random = Random.secure();
-  for (int i = 0; i < k; i++) {
-    BigInt a = _randBigInt(BigInt.two, n - BigInt.two, random);
-    BigInt x = a.modPow(d, n);
+  for (final int w in _mrWitnesses) {
+    BigInt x = BigInt.from(w).modPow(d, n);
     if (x == BigInt.one || x == n - BigInt.one) continue;
 
     bool composite = true;
     for (int r = 1; r < s; r++) {
-      x = x.modPow(BigInt.two, n);
+      x = (x * x) % n;
       if (x == n - BigInt.one) {
         composite = false;
         break;
@@ -54,20 +60,6 @@ bool isPrime(BigInt n, {int k = 5}) {
     if (composite) return false;
   }
   return true;
-}
-
-BigInt _randBigInt(BigInt min, BigInt max, Random random) {
-  BigInt range = max - min;
-  int bitLength = range.bitLength;
-  BigInt res;
-  do {
-    String bits = '';
-    for (int i = 0; i < bitLength; i++) {
-      bits += random.nextBool() ? '1' : '0';
-    }
-    res = BigInt.parse(bits, radix: 2);
-  } while (res > range);
-  return res + min;
 }
 
 /// Representa un punto en la curva elíptica
@@ -208,8 +200,14 @@ class EllipticCurve {
 
       BigInt? y = sqrtModPrime(rhs, p);
       if (y != null) {
-        points.add(ECPoint(x, y));
         BigInt y2 = (p - y) % p;
+        // Mostrar siempre la raíz menor primero, para un listado estable.
+        if (y > y2) {
+          final BigInt tmp = y;
+          y = y2;
+          y2 = tmp;
+        }
+        points.add(ECPoint(x, y));
         if (y != y2) {
           points.add(ECPoint(x, y2));
         }
@@ -219,55 +217,77 @@ class EllipticCurve {
   }
 }
 
-// Algoritmo de Tonelli-Shanks
+/// Orden de un punto dentro del grupo, y si genera el grupo completo.
+class PointOrder {
+  final ECPoint point;
+  final BigInt order;
+  final bool isGenerator;
+
+  const PointOrder(this.point, this.order, this.isGenerator);
+}
+
+/// Calcula el orden de cada punto. Un punto es generador si su orden es #E.
+List<PointOrder> computePointOrders(EllipticCurve curve, List<ECPoint> points) {
+  final BigInt card = BigInt.from(points.length);
+  return [
+    for (final ECPoint pt in points)
+      () {
+        final BigInt order = curve.findOrder(pt, card);
+        return PointOrder(pt, order, order == card);
+      }(),
+  ];
+}
+
+/// Algoritmo de Tonelli-Shanks: raíz cuadrada de n módulo el primo p.
+/// Devuelve null si n no es un residuo cuadrático módulo p.
 BigInt? sqrtModPrime(BigInt n, BigInt p) {
   n = n % p;
   if (n < BigInt.zero) n += p;
   if (n == BigInt.zero) return BigInt.zero;
   if (p == BigInt.two) return n;
 
-  // Euler's criterion
+  // Criterio de Euler
   if (n.modPow((p - BigInt.one) ~/ BigInt.two, p) != BigInt.one) {
     return null;
   }
 
+  // p - 1 = Q · 2^S con Q impar
   BigInt Q = p - BigInt.one;
-  BigInt S = BigInt.zero;
-  while (Q % BigInt.two == BigInt.zero) {
+  int S = 0;
+  while (Q.isEven) {
     Q ~/= BigInt.two;
-    S += BigInt.one;
+    S++;
   }
 
-  if (S == BigInt.one) {
+  // p ≡ 3 (mod 4): atajo directo
+  if (S == 1) {
     return n.modPow((p + BigInt.one) ~/ BigInt.from(4), p);
   }
 
+  // Primer no-residuo cuadrático z
   BigInt z = BigInt.two;
   while (z.modPow((p - BigInt.one) ~/ BigInt.two, p) != p - BigInt.one) {
     z += BigInt.one;
   }
 
-  BigInt M = S;
+  int M = S;
   BigInt c = z.modPow(Q, p);
   BigInt t = n.modPow(Q, p);
   BigInt R = n.modPow((Q + BigInt.one) ~/ BigInt.two, p);
 
-  while (true) {
-    if (t == BigInt.zero) return BigInt.zero;
-    if (t == BigInt.one) return R;
-
+  while (t != BigInt.one) {
+    // Menor i, con 0 < i < M, tal que t^(2^i) ≡ 1 (mod p)
+    int i = 0;
     BigInt t2i = t;
-    BigInt i = BigInt.zero;
-    for (i = BigInt.one; i < M; i += BigInt.one) {
+    while (t2i != BigInt.one) {
       t2i = (t2i * t2i) % p;
-      if (t2i == BigInt.one) break;
+      i++;
+      if (i == M) return null; // inalcanzable si n es residuo cuadrático
     }
 
-    if (i == M) return null;
-
+    // b = c^(2^(M-i-1)): son M-i-1 elevaciones al cuadrado, no 2^(M-i-1).
     BigInt b = c;
-    BigInt pow2 = BigInt.one << (M - i - BigInt.one).toInt();
-    for (int j = 0; j < pow2.toInt(); j++) {
+    for (int j = 0; j < M - i - 1; j++) {
       b = (b * b) % p;
     }
 
@@ -276,4 +296,5 @@ BigInt? sqrtModPrime(BigInt n, BigInt p) {
     t = (t * c) % p;
     R = (R * b) % p;
   }
+  return R;
 }
